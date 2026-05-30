@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidImage() {
+      return request.resource.contentType.matches('image/.*')
+        && request.resource.size < 10 * 1024 * 1024; // 10 MB
+    }
+
+    // Avatars — owner can upload, anyone can read
+    match /avatars/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidImage();
+    }
+
+    // App icons
+    match /app-icons/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidImage();
+    }
+
+    // Screenshots
+    match /screenshots/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidImage();
+    }
+
+    // Per-app assets
+    match /apps/{slug}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidImage();
+    }
+
+    // Per-game assets
+    match /games/{slug}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidImage();
+    }
+
+    // Deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
