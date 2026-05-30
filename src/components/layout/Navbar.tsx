@@ -8,6 +8,7 @@ import type { StoreThemeMode } from '../../hooks/useStoreTheme'
 
 export default function Navbar({ theme, onToggle }: { theme: StoreThemeMode; onToggle: (nextTheme: StoreThemeMode) => void }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const location = useLocation()
 
   const sectionTransition = { duration: 0.7, ease: [0.22, 1, 0.36, 1] as const }
@@ -15,6 +16,40 @@ export default function Navbar({ theme, onToggle }: { theme: StoreThemeMode; onT
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined
+    let cancelled = false
+
+    const attachAuth = async () => {
+      const [{ onAuthStateChanged }, { auth }] = await Promise.all([
+        import('firebase/auth'),
+        import('../../services/firebase'),
+      ])
+
+      if (cancelled) return
+
+      setIsAuthenticated(Boolean(auth.currentUser))
+      unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+        if (!cancelled) setIsAuthenticated(Boolean(nextUser))
+      })
+    }
+
+    attachAuth().catch(() => setIsAuthenticated(false))
+
+    return () => {
+      cancelled = true
+      if (unsubscribe) unsubscribe()
+    }
+  }, [])
+
+  const handleLogout = async () => {
+    const [{ signOut }, { auth }] = await Promise.all([
+      import('firebase/auth'),
+      import('../../services/firebase'),
+    ])
+    await signOut(auth)
+  }
 
   const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
     [
@@ -49,9 +84,15 @@ export default function Navbar({ theme, onToggle }: { theme: StoreThemeMode; onT
 
         <div className="hidden items-center gap-3 lg:flex">
           <ThemeToggle theme={theme} onToggle={onToggle} />
-          <Link to="/login" className="btn btn-secondary">
-            Login
-          </Link>
+          {isAuthenticated ? (
+            <button type="button" className="btn btn-secondary" onClick={handleLogout}>
+              Logout
+            </button>
+          ) : (
+            <Link to="/login" className="btn btn-secondary">
+              Login
+            </Link>
+          )}
           <Link to="/publish" className="btn btn-primary inline-flex items-center gap-2">
             Publish App
             <ArrowRight className="h-4 w-4" />
