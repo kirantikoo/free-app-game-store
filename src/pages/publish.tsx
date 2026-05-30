@@ -7,6 +7,7 @@ import { Badge, FieldRow, FieldShell, GlowButton, LoadingInline, PageShell, Prog
 import { fireStoreSchemaPreview, publishProgress, publishSections, publishSidebarItems } from '../components/data/marketplaceData'
 import { GitHubBadge } from '../components/ui/Shared'
 import { firestoreCollections, storagePaths } from '../services/firebase'
+import { generateAppSummary } from '../services/aiService'
 import { useStoreTheme } from '../hooks/useStoreTheme'
 
 type PricingModel = 'Free' | 'Freemium' | 'Paid' | 'Open Source'
@@ -131,15 +132,24 @@ function Publish() {
     return { iconUrl, screenshotUrls: uploadedScreenshots }
   }
 
-  const handleGenerateSummary = () => {
+  const handleGenerateSummary = async () => {
     setAiGenerating(true)
-    setTimeout(() => {
+    try {
+      const summary = await generateAppSummary(
+        form.name || 'This release',
+        form.category,
+        tagList,
+        form.description || form.tagline || ''
+      )
+      setForm((current) => ({ ...current, summary }))
+    } catch {
       setForm((current) => ({
         ...current,
-        summary: `AI summary: ${current.name || 'This release'} is a ${current.category.toLowerCase()} product with ${tagList.slice(0, 3).join(', ') || 'premium creator tooling'} built for fast distribution.`,
+        summary: `${current.name || 'This release'} is a ${current.category.toLowerCase()} product with ${tagList.slice(0, 3).join(', ') || 'premium creator tooling'} built for fast distribution.`,
       }))
+    } finally {
       setAiGenerating(false)
-    }, 900)
+    }
   }
 
   const handlePublish = async (event: React.FormEvent<HTMLFormElement>) => {
