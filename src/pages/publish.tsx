@@ -93,6 +93,15 @@ function Publish() {
     }))
   }
 
+  const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'])
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+
+  const validateFile = (file: File): string | null => {
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) return `"${file.name}" has an invalid type (${file.type}). Only JPEG, PNG, GIF, WebP, and SVG are allowed.`
+    if (file.size > MAX_FILE_SIZE) return `"${file.name}" exceeds the 10 MB size limit.`
+    return null
+  }
+
   const validate = () => {
     if (!form.name || !form.slug || !form.tagline || !form.description || !form.githubUrl || !form.demoUrl) {
       return 'Please complete the app details, GitHub integration, and deployment fields.'
@@ -103,12 +112,25 @@ function Publish() {
     if (!screenshotFiles.length) {
       return 'Please upload at least one screenshot.'
     }
+    const iconError = validateFile(iconFile)
+    if (iconError) return iconError
+    for (const file of screenshotFiles) {
+      const fileError = validateFile(file)
+      if (fileError) return fileError
+    }
     return ''
   }
 
   const pickFiles = (files: FileList | null) => {
     if (!files) return
-    const selectedFiles = Array.from(files)
+    const selectedFiles = Array.from(files).filter((file) => {
+      const fileError = validateFile(file)
+      if (fileError) {
+        setError(fileError)
+        return false
+      }
+      return true
+    })
     if (!selectedFiles.length) return
     if (!iconFile) {
       setIconFile(selectedFiles[0])

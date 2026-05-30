@@ -38,10 +38,14 @@ export const firestoreCollections = {
   marketplaceGames: collection(db, 'marketplaceGames'),
 }
 
+function sanitizePathSegment(segment: string): string {
+  return segment.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.\./g, '_')
+}
+
 export const storagePaths = {
-  avatar: (fileName: string) => ref(storage, `avatars/${fileName}`),
-  appIcon: (fileName: string) => ref(storage, `app-icons/${fileName}`),
-  screenshot: (fileName: string) => ref(storage, `screenshots/${fileName}`),
+  avatar: (fileName: string) => ref(storage, `avatars/${sanitizePathSegment(fileName)}`),
+  appIcon: (fileName: string) => ref(storage, `app-icons/${sanitizePathSegment(fileName)}`),
+  screenshot: (fileName: string) => ref(storage, `screenshots/${sanitizePathSegment(fileName)}`),
 }
 
 export async function ensureUserRecord(profile: UserProfileRecord) {
