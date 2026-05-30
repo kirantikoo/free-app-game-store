@@ -24,7 +24,7 @@ import {
     }))
   }
   
-  export async function approveSubmission(submission: any) {
+  export async function approveSubmission(submission: Record<string, unknown> & { id: string; type: string }) {
     const targetCollection = submission.type === "game" ? "games" : "apps"
   
     await addDoc(collection(db, targetCollection), {

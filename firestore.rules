@@ -1,0 +1,107 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // --- users ---
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // --- userProfiles ---
+    match /userProfiles/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isAdmin();
+    }
+
+    // --- submissions ---
+    match /submissions/{submissionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // --- appSubmissions ---
+    match /appSubmissions/{submissionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // --- apps (approved catalog) ---
+    match /apps/{appId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- games (approved catalog) ---
+    match /games/{gameId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- categories ---
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- reviews ---
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isOwner(resource.data.uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // --- analytics ---
+    match /analytics/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // --- settings ---
+    match /settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // --- marketplace collections (read-only for public) ---
+    match /marketplaceApps/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /marketplaceGames/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- deny everything else by default ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
