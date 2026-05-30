@@ -8,7 +8,7 @@ import {
   } from "firebase/firestore"
   import { db } from "../firebase/config"
   
-  export async function createSubmission(data: any) {
+  export async function createSubmission(data: Record<string, unknown>) {
     return await addDoc(collection(db, "submissions"), {
       ...data,
       status: "pending",
