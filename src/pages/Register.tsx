@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Sparkles, UserRoundPlus, Upload, ShieldCheck, Eye, EyeOff } from 'lucide-react'
-import { browserLocalPersistence, createUserWithEmailAndPassword, setPersistence, signInWithPopup, updateProfile } from 'firebase/auth'
+import { browserLocalPersistence, createUserWithEmailAndPassword, setPersistence, signInWithPopup, updateProfile, type AuthError } from 'firebase/auth'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { getDownloadURL, uploadBytes } from 'firebase/storage'
 import { Link, useNavigate } from 'react-router-dom'
@@ -63,6 +63,30 @@ function Register() {
 		return ''
 	}
 
+	const handleAuthError = (authError: unknown, fallbackMessage: string) => {
+		if (typeof authError === 'object' && authError && 'code' in authError) {
+			const typedError = authError as AuthError
+			if (typedError.code === 'auth/email-already-in-use') {
+				setError('An account already exists for this email. Sign in instead, or use a different email to create a new account.')
+				return
+			}
+			if (typedError.code === 'auth/operation-not-allowed') {
+				setError('This Firebase sign-in method is disabled for the project. Enable Email/Password or the social provider in Firebase Console > Authentication > Sign-in method.')
+				return
+			}
+			if (typedError.code === 'auth/unauthorized-domain') {
+				setError('This domain is not authorized in Firebase. Add your site domain in Firebase Console > Authentication > Settings > Authorized domains.')
+				return
+			}
+			if (typedError.code === 'auth/popup-closed-by-user') {
+				setError('The sign-in popup was closed before Firebase could finish the request.')
+				return
+			}
+		}
+
+		setError(authError instanceof Error ? authError.message : fallbackMessage)
+	}
+
 	const uploadAvatar = async (uid: string) => {
 		if (!form.avatar) return ''
 		const avatarRef = storagePaths.avatar(`${uid}-${form.avatar.name}`)
@@ -70,25 +94,38 @@ function Register() {
 		return getDownloadURL(avatarRef)
 	}
 
-	const persistProfile = async (uid: string, photoURL: string) => {
-		await ensureUserRecord({
-			uid,
-			displayName: form.fullName,
-			username: form.username,
-			email: form.email,
-			photoURL,
-			providerId: 'password',
-			role: 'user',
-		})
-		await setDoc(doc(firestoreCollections.userProfiles, uid), {
-			uid,
-			displayName: form.fullName,
-			username: form.username,
-			email: form.email,
-			photoURL,
-			providerId: 'password',
-			createdAt: serverTimestamp(),
-		})
+	const persistProfile = async (uid: string, profile: { displayName: string; username: string; email: string; photoURL: string; providerId: string }) => {
+		let succeeded = true
+
+		try {
+			await ensureUserRecord({
+				uid,
+				displayName: profile.displayName,
+				username: profile.username,
+				email: profile.email,
+				photoURL: profile.photoURL,
+				providerId: profile.providerId,
+				role: 'user',
+			})
+		} catch {
+			succeeded = false
+		}
+
+		try {
+			await setDoc(doc(firestoreCollections.userProfiles, uid), {
+				uid,
+				displayName: profile.displayName,
+				username: profile.username,
+				email: profile.email,
+				photoURL: profile.photoURL,
+				providerId: profile.providerId,
+				createdAt: serverTimestamp(),
+			})
+		} catch {
+			succeeded = false
+		}
+
+		return succeeded
 	}
 
 	const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -111,12 +148,18 @@ function Register() {
 				displayName: form.fullName,
 				photoURL: photoURL || null,
 			})
-			await persistProfile(credentials.user.uid, photoURL)
+			const savedProfile = await persistProfile(credentials.user.uid, {
+				displayName: form.fullName,
+				username: form.username,
+				email: form.email,
+				photoURL,
+				providerId: 'password',
+			})
 			const role = await getUserRole(credentials.user.uid)
-			setMessage('Account created successfully. Redirecting to your dashboard...')
+			setMessage(savedProfile ? 'Account created successfully. Redirecting to your dashboard...' : 'Account created. Some profile details could not be saved, but your account is active. Redirecting now...')
 			setTimeout(() => navigate(role === 'admin' ? '/admin' : '/dashboard'), 850)
-		} catch {
-			setError('We could not complete the signup right now. Please try again.')
+		} catch (authError) {
+			handleAuthError(authError, 'We could not complete the signup right now. Please try again.')
 		} finally {
 			setLoading(false)
 		}
@@ -128,20 +171,18 @@ function Register() {
 			setError('')
 			setMessage('')
 			const credentials = await signInWithPopup(auth, provider)
-			await ensureUserRecord({
-				uid: credentials.user.uid,
+			const savedProfile = await persistProfile(credentials.user.uid, {
 				displayName: credentials.user.displayName || form.fullName || credentials.user.email?.split('@')[0] || 'Creator',
 				username: credentials.user.email?.split('@')[0] || credentials.user.uid.slice(0, 8),
 				email: credentials.user.email || form.email,
-				photoURL: credentials.user.photoURL,
+				photoURL: credentials.user.photoURL || '',
 				providerId: credentials.user.providerId,
-				role: 'user',
 			})
 			const role = await getUserRole(credentials.user.uid)
-			setMessage('Account connected successfully. Taking you inside...')
+			setMessage(savedProfile ? 'Account connected successfully. Taking you inside...' : 'Account connected, but profile sync could not be completed. Taking you inside...')
 			setTimeout(() => navigate(role === 'admin' ? '/admin' : '/dashboard'), 850)
-		} catch {
-			setError('Social signup failed. Please try email registration instead.')
+		} catch (authError) {
+			handleAuthError(authError, 'Social signup failed. Please try email registration instead.')
 		} finally {
 			setLoading(false)
 		}
@@ -221,7 +262,7 @@ function Register() {
 							Continue with Google
 						</button>
 						<button type="button" onClick={() => handleProviderSignUp(githubAuthProvider)} className="theme-card inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-[color:var(--text-primary)] transition hover:bg-[color:var(--accent-soft)]" disabled={loading}>
-								<GitHubBadge className="h-4 w-4" />
+							<GitHubBadge className="h-4 w-4" />
 							Continue with GitHub
 						</button>
 					</div>

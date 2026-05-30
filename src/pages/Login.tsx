@@ -34,6 +34,14 @@ function Login() {
 				setError('Invalid email or password. Please try again.')
 				return
 			}
+			if (typedError.code === 'auth/operation-not-allowed') {
+				setError('This Firebase sign-in method is disabled for the project. Enable the provider in Firebase Console > Authentication > Sign-in method.')
+				return
+			}
+			if (typedError.code === 'auth/unauthorized-domain') {
+				setError('This domain is not authorized in Firebase. Add your site domain in Firebase Console > Authentication > Settings > Authorized domains.')
+				return
+			}
 		}
 		setError(fallback)
 	}
